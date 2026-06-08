@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>회원탈퇴 v3</title>
+<style>
+  :root{
+    --primary:#3B5BFE; --primary-weak:#EEF1FF; --primary-border:#C5CEFF;
+    --warn:#D97706; --warn-bg:#FFF8EC; --warn-border:#FBD9A0; --warn-text:#92400E;
+    --danger:#E0453B; --danger-bg:#FEF2F1; --danger-border:#F6C9C5; --danger-text:#9B2C24;
+    --text:#181820; --text-sub:#5E6270; --text-mute:#9AA0AC;
+    --line:#ECECF1; --line-strong:#D7D9E0; --bg:#F3F4F7;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",sans-serif;
+    background:var(--bg);color:var(--text);display:flex;justify-content:center;align-items:flex-start;
+    min-height:100vh;padding:28px 16px;-webkit-font-smoothing:antialiased;}
+
+  /* 데모 전환 탭 */
+  .demo-tabs{position:fixed;top:14px;left:14px;display:flex;gap:6px;z-index:99;}
+  .demo-tabs button{font-size:12px;font-weight:700;padding:8px 12px;border-radius:8px;border:1px solid var(--line-strong);background:#fff;cursor:pointer;color:var(--text-sub);}
+  .demo-tabs button.on{background:var(--primary);border-color:var(--primary);color:#fff;}
+
+  .modal{width:600px;max-width:100%;background:#fff;border-radius:18px;
+    box-shadow:0 24px 60px rgba(20,20,40,.18);overflow:hidden;display:flex;flex-direction:column;
+    max-height:calc(100vh - 56px);}
+  .modal__head{padding:20px 24px 16px;flex:none;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;}
+  .modal__head h1{font-size:18px;font-weight:700;margin:0;}
+  .close{border:0;background:none;font-size:20px;color:var(--text-mute);cursor:pointer;line-height:1;padding:4px;}
+
+  .body{padding:20px 24px 6px;overflow-y:auto;}
+  .foot{padding:14px 24px 20px;border-top:1px solid var(--line);display:flex;gap:10px;flex:none;background:#fff;align-items:center;}
+  .foot .spacer{flex:1;}
+
+  .btn{padding:13px 22px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid transparent;transition:.15s;}
+  .btn--ghost{background:#fff;border-color:var(--line-strong);color:var(--text-sub);}
+  .btn--ghost:hover{background:#F6F6F9;}
+  .btn--primary{background:var(--primary);color:#fff;}
+  .btn--primary:hover{background:#2E49E0;}
+  .btn--primary:disabled{background:#C3CBF5;cursor:not-allowed;}
+  .btn--danger{background:var(--danger);color:#fff;}
+  .btn--danger:hover{background:#C93A31;}
+  .btn--danger:disabled{background:#EFB6B1;cursor:not-allowed;}
+
+  .intro{font-size:13.5px;line-height:1.7;color:var(--text-sub);margin:0 0 18px;}
+  .intro b{color:var(--text);font-weight:600;}
+
+  .sec-title{display:flex;align-items:center;gap:8px;margin:0 0 12px;}
+  .sec-title h2{font-size:15px;font-weight:700;margin:0;}
+  .req{font-size:11px;font-weight:700;color:var(--primary);background:var(--primary-weak);padding:2px 8px;border-radius:999px;}
+
+  /* 전체선택 바 — 스크롤 영역 바깥에 고정 (스크롤에 빨려들어가지 않도록) */
+  .selbar{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#FAFAFC;}
+  .selbar__count{font-size:12.5px;color:var(--text-sub);}
+  .selbar__count b{color:var(--primary);}
+
+  .chk{position:relative;display:inline-flex;align-items:center;cursor:pointer;user-select:none;font-size:13px;color:var(--text-sub);gap:8px;}
+  .chk input{position:absolute;opacity:0;width:0;height:0;}
+  .chk__box{position:relative;width:20px;height:20px;border:1.5px solid var(--line-strong);border-radius:6px;background:#fff;
+    display:inline-flex;align-items:center;justify-content:center;flex:none;transition:.15s;}
+  .chk input:checked + .chk__box,.chk input:indeterminate + .chk__box{background:var(--primary);border-color:var(--primary);}
+  .chk__box svg{opacity:0;}
+  .chk input:checked + .chk__box svg{opacity:1;}              /* 전체 선택 → 체크마크 */
+  .chk__dash{position:absolute;width:10px;height:2px;background:#fff;border-radius:1px;opacity:0;}
+  .chk input:indeterminate + .chk__box .chk__dash{opacity:1;} /* 일부 선택 → 대시 (체크와 구분) */
+
+  .sites{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;
+    overflow-y:auto;margin-bottom:16px;max-height:270px;}   /* 약 3.5개 노출 후 내부 스크롤 */
+  .site{border-top:1px solid var(--line);transition:background .15s;}
+  .site:first-child{border-top:0;}
+  .site.is-checked{background:#FAFBFF;}
+  .site.no-check.is-checked{background:#fff;}  /* 단일 사이트(자동선택)는 선택 배경 끔 */
+  .site__main{display:flex;align-items:center;gap:10px;padding:12px 14px;}
+  .site__pick{display:flex;align-items:center;gap:11px;flex:1;min-width:0;cursor:pointer;margin:0;}
+  .site.no-check .site__pick{cursor:default;}
+  .site-chk{position:absolute;opacity:0;width:0;height:0;}
+  .site-chk:checked + .chk__box{background:var(--primary);border-color:var(--primary);}
+  .site-chk:checked + .chk__box svg{opacity:1;}
+  .site__thumb{width:38px;height:38px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-size:17px;}
+  .site__info{flex:1;min-width:0;}
+  .site__name{font-size:14px;font-weight:600;margin:0 0 2px;}
+  .site__meta{font-size:11.5px;color:var(--text-mute);margin:0;}
+
+  /* 이동 링크 — 사이트 보기 / 클래스 보기 공용 (UX·UI 동일) */
+  .go-link{font-size:11.5px;font-weight:600;color:var(--primary);text-decoration:none;white-space:nowrap;
+    border:1px solid var(--primary-border);padding:4px 9px;border-radius:7px;background:#fff;flex:none;}
+  .go-link:hover{background:var(--primary-weak);}
+
+  /* 아코디언 토글 — 텍스트 + 화살표로만 */
+  .peek{margin-top:5px;font-size:12.5px;font-weight:700;color:var(--warn);background:none;border:0;
+    cursor:pointer;padding:0;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+  .peek svg{transition:.2s;}
+  .peek.open svg{transform:rotate(180deg);}
+  .peek.none{color:var(--text-mute);font-weight:400;font-size:11.5px;cursor:default;}
+  .site__detail{max-height:0;overflow:hidden;transition:max-height .28s ease;background:var(--warn-bg);}
+  .site__detail.open{max-height:340px;}
+  .site__detail-inner{padding:4px 14px 12px 63px;}
+  .detail-head{font-size:11.5px;font-weight:700;color:var(--warn);padding:9px 0 4px;}
+  .cls-scroll{max-height:230px;overflow-y:auto;}
+  .cls{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--warn-border);}
+  .cls:first-child{border-top:0;}
+  .cls__left{min-width:0;}
+  .cls__title{font-size:12.5px;font-weight:600;color:var(--text);margin:0 0 2px;}
+  .cls__period{font-size:11px;color:var(--warn);margin:0;}
+  .cls__period b{font-weight:700;}
+
+  /* 계정 삭제 안내 (일반) */
+  .accbox{padding-top:4px;margin-bottom:6px;}
+  .accbox h3{font-size:13.5px;font-weight:700;margin:0 0 7px;}
+  .accbox p{font-size:12px;color:var(--text-sub);line-height:1.6;margin:0 0 3px;display:flex;gap:6px;}
+  .accbox p::before{content:"•";color:var(--text-mute);}
+
+  /* 계정 삭제 경고 (전체 탈퇴/마지막 사이트) — 타이틀 색을 본문과 통일 */
+  .acc-danger{display:none;border:1px solid var(--danger-border);background:var(--danger-bg);border-radius:12px;padding:14px 16px;margin-top:14px;margin-bottom:6px;}
+  .acc-danger.on{display:block;}
+  .acc-danger h3{font-size:13.5px;font-weight:800;color:var(--danger-text);margin:0 0 6px;display:flex;align-items:center;gap:6px;}
+  .acc-danger p{font-size:12.5px;color:var(--danger-text);line-height:1.65;margin:0;}
+  .acc-danger p b{font-weight:800;}
+
+  /* ---- STEP 2 폼 ---- */
+  .view{display:none;} .view.on{display:block;}
+  .field{margin-bottom:18px;}
+  .field > label{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:700;margin-bottom:4px;}
+  .field .hint{font-size:12px;color:var(--text-mute);margin:0 0 9px;}
+  .field select,.field textarea,.field input[type=text]{width:100%;padding:11px 12px;border:1px solid var(--line-strong);border-radius:10px;font-size:13px;outline:none;font-family:inherit;}
+  .field select:focus,.field textarea:focus,.field input:focus{border-color:var(--primary);}
+  .field textarea{resize:vertical;min-height:84px;}
+
+  /* 확인 박스 — 타이틀 색을 본문과 통일 */
+  .confirmbox{border:1px solid var(--warn-border);background:var(--warn-bg);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
+  .confirmbox h4{font-size:13px;font-weight:700;color:var(--warn-text);margin:0 0 8px;display:flex;align-items:center;gap:6px;}
+  .confirmbox .note{font-size:12px;color:var(--warn-text);line-height:1.7;margin:0 0 3px;display:flex;gap:6px;}
+  .confirmbox .note::before{content:"*";}
+  .loss-group{margin-top:12px;border-top:1px dashed var(--warn-border);padding-top:10px;}
+  .loss-line{font-size:12px;font-weight:700;color:var(--warn-text);margin:0;line-height:1.6;}
+  .loss-line b{font-weight:800;}
+
+  .agree{display:flex;align-items:center;gap:9px;padding:13px;border:1px solid var(--line-strong);border-radius:10px;cursor:pointer;}
+  .agree.on{border-color:var(--primary);background:var(--primary-weak);}
+  .agree .t{font-size:13px;font-weight:600;}
+
+  .done-view{display:none;text-align:center;padding:30px 10px 20px;}
+  .done-view.on{display:block;}
+  .done-view .ic{width:60px;height:60px;border-radius:50%;background:#E7F6EC;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 16px;}
+  .done-view h2{font-size:18px;margin:0 0 8px;}
+  .done-view p{font-size:13.5px;color:var(--text-sub);line-height:1.7;margin:0;}
+</style>
+</head>
+<body>
+
+<div class="demo-tabs">
+  <button data-demo="many" class="on">사이트 여러 개 (16개)</button>
+  <button data-demo="single">사이트 1개 (계정 삭제)</button>
+</div>
+
+<div class="modal">
+  <div class="modal__head">
+    <h1>회원탈퇴</h1>
+    <button class="close">✕</button>
+  </div>
+
+  <div class="body" id="body">
+
+    <!-- ===== STEP 1 ===== -->
+    <section class="view on" id="view-select">
+      <p class="intro" id="introText"></p>
+      <div class="sec-title"><h2>가입 중인 사이트</h2></div>
+
+      <div class="selbar" id="selbar">
+        <label class="chk">
+          <input type="checkbox" id="selectAll" />
+          <span class="chk__box"><i class="chk__dash"></i><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.2L5 8.5L9.5 3.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span>전체 선택</span>
+        </label>
+        <span class="selbar__count"><b id="selCount">0</b> / <span id="totalCount">0</span>개 선택됨</span>
+      </div>
+
+      <div class="sites" id="siteList"></div>
+
+      <!-- 일반 계정삭제 안내 -->
+      <div class="accbox" id="accInfo">
+        <h3>라이브클래스 계정을 삭제하고 싶으신가요?</h3>
+        <p>계정 삭제가 필요한 경우 가입한 모든 사이트에서 탈퇴 접수를 진행해 주세요.</p>
+        <p>모든 사이트에서 탈퇴 처리가 완료되면 계정이 자동으로 삭제됩니다.</p>
+      </div>
+
+      <!-- 전체/마지막 사이트 탈퇴 시 경고 (문구·색상 공통) -->
+      <div class="acc-danger" id="accDanger">
+        <h3>⚠️ 라이브클래스 계정까지 함께 삭제됩니다</h3>
+        <p>가입하신 모든 사이트에서 탈퇴하시면 라이브클래스 계정까지 함께 삭제됩니다. 이후 수강 내역, 활동 기록 등 모든 연결 정보를 복구할 수 없습니다.</p>
+      </div>
+    </section>
+
+    <!-- ===== STEP 2 (선택 사이트 일괄 작성) ===== -->
+    <section class="view" id="view-form">
+      <div class="field">
+        <label>탈퇴하시려는 이유를 알려주세요. <span class="req">필수</span></label>
+        <p class="hint">더 나아진 모습이 될 수 있도록 무엇이든 말씀해주시면 감사하겠습니다.</p>
+        <select id="fReason">
+          <option value="">선택</option>
+          <option>중복 계정이 있어요.</option>
+          <option>개인정보가 걱정돼요.</option>
+          <option>필요한 기능이 없어요.</option>
+          <option>사용이 불편해요.</option>
+          <option>자주 사용하지 않아요.</option>
+          <option>기타</option>
+        </select>
+      </div>
+      <div class="field" id="fEtcField" style="display:none;">
+        <label>기타 항목에 대한 이유를 적어주시면 감사하겠습니다.</label>
+        <input type="text" id="fEtc" placeholder="자유롭게 적어주세요" />
+      </div>
+      <div class="field">
+        <label style="font-size:14px;">서비스에서 느낀 경험을 평가해주세요.</label>
+        <select id="fRating">
+          <option value="">선택</option>
+          <option value="5">★★★★★</option>
+          <option value="4">★★★★</option>
+          <option value="3">★★★</option>
+          <option value="2">★★</option>
+          <option value="1">★</option>
+        </select>
+      </div>
+      <div class="field">
+        <label style="font-size:14px;">저희가 더 나아질 수 있도록 어떤 말씀이든 편하게 해주세요.</label>
+        <textarea id="fComment" placeholder="개선 의견을 남겨주세요"></textarea>
+      </div>
+
+      <div class="confirmbox">
+        <h4>회원 탈퇴 전 확인해주세요! <span class="req" style="background:#fff;">필수</span></h4>
+        <p class="note">탈퇴하시면 더 이상 로그인이 불가능하며, 삭제된 정보는 복구가 불가능합니다.</p>
+        <p class="note">프로필과 수강 클래스 정보가 삭제됩니다. (거래기록은 전자상거래법에 따라 5년 보관)</p>
+        <p class="note">클래스에 작성한 글과 댓글, 리뷰는 삭제되지 않으니 필요하다면 미리 확인하고 지워주세요.</p>
+        <p class="note">탈퇴 처리는 영업일 기준 5일 정도 소요될 수 있습니다.</p>
+        <div class="loss-group" id="fLoss" style="display:none;"></div>
+      </div>
+
+      <label class="agree" id="fAgreeBox">
+        <span class="chk" style="pointer-events:none;">
+          <input type="checkbox" id="fAgree" />
+          <span class="chk__box"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.2L5 8.5L9.5 3.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </span>
+        <span class="t">안내사항을 확인하였으며 동의합니다.</span>
+      </label>
+    </section>
+
+    <!-- ===== 완료 ===== -->
+    <section class="done-view" id="view-done">
+      <div class="ic">✓</div>
+      <h2>탈퇴 접수가 완료되었어요</h2>
+      <p id="doneMsg"></p>
+    </section>
+  </div>
+
+  <div class="foot" id="foot">
+    <button class="btn btn--ghost" id="btnBack">닫기</button>
+    <span class="spacer"></span>
+    <button class="btn btn--primary" id="btnNext" disabled>다음</button>
+  </div>
+</div>
+
+<script>
+/* 유료 클래스 n개 생성 (각 클래스마다 이동 링크 포함) */
+function genClasses(n){
+  const names=['UX 디자인 입문','포트폴리오 8주 챌린지','데이터 분석 마스터','브랜딩 실전','노션 생산성','피그마 심화','마케팅 퍼널 설계','글쓰기 부트캠프'];
+  return Array.from({length:n},(_,i)=>({
+    t:names[i%names.length],
+    d:`2026.${String((i%12)+1).padStart(2,'0')}.28`,
+    left:30+i*11,
+    url:`https://class.liveklass.com/class/${i+1}`
+  }));
+}
+
+/* 사이트 n개 생성 — 일부에만 유료 클래스 부여 (목록/스크롤 케이스 확인용) */
+function genSites(n){
+  const palette=[
+    ['🎨','linear-gradient(135deg,#A5B4FC,#818CF8)'],['📚','linear-gradient(135deg,#FCD34D,#FB923C)'],
+    ['🎬','linear-gradient(135deg,#6EE7B7,#34D399)'],['💻','linear-gradient(135deg,#93C5FD,#3B82F6)'],
+    ['✏️','linear-gradient(135deg,#F9A8D4,#EC4899)'],['🎯','linear-gradient(135deg,#C4B5FD,#A78BFA)'],
+    ['📷','linear-gradient(135deg,#FDBA74,#F97316)'],['🎵','linear-gradient(135deg,#67E8F9,#22D3EE)'],
+  ];
+  const names=['○○○ 클래스','△△△ 아카데미','□□□ 스튜디오','코드랩 부트캠프','드로잉 살롱','머니랩','보컬 트레이닝','포토 스쿨','요가 플로우','베이킹 하우스','글방','데이터캠프','마케팅랩','노션클럽','피그마스쿨','영상공작소'];
+  const paidMap={0:1, 3:3, 6:16, 11:2};  // 이 사이트들만 유료 클래스 보유
+  return Array.from({length:n},(_,i)=>{
+    const [emoji,color]=palette[i%palette.length];
+    const y=2024+(i%3), m=String((i%12)+1).padStart(2,'0');
+    return {
+      id:'s'+i, name:names[i%names.length], url:`site-${i+1}.liveklass.com`,
+      joined:`${y}.${m}.12`, emoji, color, classes:genClasses(paidMap[i]||0)
+    };
+  });
+}
+
+const DEMOS = {
+  many: genSites(16),
+  single: [
+    {id:'only',name:'라몽 월드',url:'ramong.liveklass.com',joined:'2025.03.04',emoji:'😊',color:'linear-gradient(135deg,#F9A8D4,#EC4899)',classes:genClasses(1)},
+  ],
+};
+
+const $=s=>document.querySelector(s);
+let SITES=[], selected=[], openDetail={}, mode='select';
+let form={reason:'',etc:'',rating:'',comment:'',agree:false};
+
+/* 안내 문구는 사이트 개수와 무관하게 공통 사용 */
+const INTRO_HTML = '안녕하세요. 라이브클래스 운영팀입니다.<br/>회원탈퇴를 원하시는 사이트를 선택해 주세요.';
+
+function loadDemo(key){
+  SITES = JSON.parse(JSON.stringify(DEMOS[key]));
+  SITES.sort((a,b)=>{
+    const pa=a.classes.length>0, pb=b.classes.length>0;
+    if(pa!==pb) return pa?-1:1;               // 1) 수강 중인 유료 클래스 보유 사이트 상단 고정
+    return b.joined.localeCompare(a.joined);  // 2) 최근 가입일 순
+  });
+  selected = SITES.length===1 ? [SITES[0].id] : [];   // 1개면 자동 선택
+  openDetail={}; mode='select'; form={reason:'',etc:'',rating:'',comment:'',agree:false};
+  document.querySelectorAll('.demo-tabs button').forEach(b=>b.classList.toggle('on',b.dataset.demo===key));
+  $('#introText').innerHTML = INTRO_HTML;
+  switchView('view-select'); $('#foot').style.display='flex';
+  $('#btnBack').textContent='취소'; resetNextBtn();
+  renderList(); syncSel();
+}
+
+function resetNextBtn(){ $('#btnNext').textContent='다음'; $('#btnNext').className='btn btn--primary'; }
+
+function renderList(){
+  const single = SITES.length===1;
+  $('#selbar').style.display = single ? 'none' : 'flex';
+  $('#totalCount').textContent = SITES.length;
+
+  $('#siteList').innerHTML = SITES.map(s=>{
+    const checked = selected.includes(s.id);
+    const hasPaid = s.classes.length>0;
+    const peek = hasPaid
+      ? `<button class="peek ${openDetail[s.id]?'open':''}" data-peek="${s.id}">수강 중인 유료 클래스 ${s.classes.length}건
+           <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`
+      : `<span class="peek none">수강 중인 유료 클래스 없음</span>`;
+    const detail = hasPaid ? `
+      <div class="site__detail ${openDetail[s.id]?'open':''}" data-detail="${s.id}">
+        <div class="site__detail-inner">
+          <div class="detail-head">⚠️ 탈퇴하면 아래 유료 클래스를 더 이상 수강할 수 없어요</div>
+          <div class="cls-scroll">
+          ${s.classes.map(c=>`<div class="cls">
+            <div class="cls__left"><p class="cls__title">${c.t}</p>
+            <p class="cls__period">수강기간 <b>${c.d}</b>까지 (${c.left}일 남음)</p></div>
+            <a href="${c.url}" target="_blank" rel="noopener" class="go-link">클래스 보기 ›</a></div>`).join('')}
+          </div>
+        </div>
+      </div>` : '';
+    return `<div class="site ${checked?'is-checked':''} ${single?'no-check':''}">
+        <div class="site__main">
+          <label class="site__pick">
+            ${single?'':`<input type="checkbox" class="site-chk" data-id="${s.id}" ${checked?'checked':''}/>
+              <span class="chk__box"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.2L5 8.5L9.5 3.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`}
+            <div class="site__thumb" style="background:${s.color}">${s.emoji}</div>
+            <div class="site__info">
+              <p class="site__name">${s.name}</p>
+              <p class="site__meta">${s.url} · ${s.joined} 가입</p>
+              ${peek}
+            </div>
+          </label>
+          <a href="https://${s.url}" target="_blank" rel="noopener" class="go-link">사이트 보기 ›</a>
+        </div>
+        ${detail}
+      </div>`;
+  }).join('');
+
+  $('#siteList').querySelectorAll('.site-chk').forEach(c=>c.addEventListener('change',e=>{
+    const id=e.target.dataset.id;
+    if(e.target.checked){if(!selected.includes(id))selected.push(id);} else selected=selected.filter(x=>x!==id);
+    e.target.closest('.site').classList.toggle('is-checked',e.target.checked); syncSel();
+  }));
+  $('#siteList').querySelectorAll('[data-peek]').forEach(b=>b.addEventListener('click',e=>{
+    e.preventDefault();e.stopPropagation();
+    const id=b.dataset.peek; openDetail[id]=!openDetail[id];
+    b.classList.toggle('open',openDetail[id]);
+    $('#siteList').querySelector(`[data-detail="${id}"]`)?.classList.toggle('open',openDetail[id]);
+  }));
+}
+
+function syncSel(){
+  const single=SITES.length===1;
+  $('#selCount').textContent=selected.length;
+  if(!single){
+    const all=$('#selectAll');
+    all.checked=selected.length===SITES.length;                       // 전부 개별 선택했을 때만 체크(✓)
+    all.indeterminate=selected.length>0&&selected.length<SITES.length; // 일부만 선택 시 대시(–)
+  }
+  $('#btnNext').disabled=selected.length===0;
+
+  // 계정 삭제 경고: 선택한 사이트 = 가입한 전체 사이트
+  const deletesAccount = selected.length>0 && selected.length===SITES.length;
+  $('#accDanger').classList.toggle('on',deletesAccount);
+  $('#accInfo').style.display = deletesAccount ? 'none':'block';
+}
+
+$('#selectAll').addEventListener('change',e=>{selected=e.target.checked?SITES.map(s=>s.id):[];renderList();syncSel();});
+
+/* STEP 2 */
+function showForm(){
+  mode='form';
+  $('#fReason').value=form.reason;$('#fEtc').value=form.etc;$('#fRating').value=form.rating;$('#fComment').value=form.comment;
+  $('#fAgree').checked=form.agree;$('#fAgreeBox').classList.toggle('on',form.agree);
+  syncEtc();
+
+  // 선택 사이트들의 유료 클래스 손실 — 목록 없이 총 건수만 안내
+  const total = selected.map(id=>SITES.find(s=>s.id===id)).filter(Boolean).reduce((n,s)=>n+s.classes.length,0);
+  if(total){
+    $('#fLoss').style.display='block';
+    $('#fLoss').innerHTML = `<p class="loss-line">탈퇴 시 수강 중인 유료 클래스 <b>${total}건</b>을 더 이상 수강할 수 없어요</p>`;
+  } else $('#fLoss').style.display='none';
+
+  switchView('view-form');
+  $('#btnBack').textContent = SITES.length===1 ? '취소' : '이전';
+  $('#btnNext').textContent='탈퇴 접수하기'; $('#btnNext').className='btn btn--danger';
+  validateForm();
+}
+function saveForm(){form={reason:$('#fReason').value,etc:$('#fEtc').value,rating:$('#fRating').value,comment:$('#fComment').value,agree:$('#fAgree').checked};}
+function validateForm(){$('#btnNext').disabled=!($('#fReason').value&&$('#fAgree').checked);}
+/* '기타' 선택 시에만 기타 사유 입력란 노출 (선택 해제 시 입력값 초기화) */
+function syncEtc(){
+  const show = $('#fReason').value==='기타';
+  $('#fEtcField').style.display = show?'block':'none';
+  if(!show && $('#fEtc').value) $('#fEtc').value='';
+}
+['#fReason','#fEtc','#fRating','#fComment'].forEach(s=>$(s).addEventListener('input',()=>{syncEtc();saveForm();validateForm();}));
+$('#fAgreeBox').addEventListener('click',()=>{const a=$('#fAgree');a.checked=!a.checked;$('#fAgreeBox').classList.toggle('on',a.checked);saveForm();validateForm();});
+
+function switchView(id){['view-select','view-form','view-done'].forEach(v=>$('#'+v).classList.toggle('on',v===id));}
+
+$('#btnNext').addEventListener('click',()=>{
+  if(mode==='select') showForm();
+  else if(mode==='form'){ saveForm(); finish(); }
+});
+$('#btnBack').addEventListener('click',()=>{
+  if(mode==='form' && SITES.length>1){
+    saveForm(); mode='select'; switchView('view-select');
+    $('#btnBack').textContent='취소'; resetNextBtn(); syncSel();
+  } else alert('탈퇴를 취소했습니다. (프로토타입)');
+});
+
+function finish(){
+  mode='done'; switchView('view-done');
+  const deletesAccount = selected.length===SITES.length;
+  $('#doneMsg').innerHTML = deletesAccount
+    ? `<b>${selected.length}개</b> 사이트 탈퇴와 함께 <b>라이브클래스 계정 삭제</b>가 접수되었습니다.<br/>영업일 기준 5일 이내 처리됩니다.`
+    : `<b>${selected.length}개</b> 사이트의 탈퇴 접수가 완료되었습니다.<br/>영업일 기준 5일 이내 처리됩니다.`;
+  $('#foot').style.display='none';
+}
+
+document.querySelectorAll('.demo-tabs button').forEach(b=>b.addEventListener('click',()=>loadDemo(b.dataset.demo)));
+loadDemo('many');
+</script>
+</body>
+</html>
